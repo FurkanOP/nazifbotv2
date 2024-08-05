@@ -641,7 +641,7 @@ async def key(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 
             else:
                 await context.bot.forward_message(chat_id=gurupchatid, from_chat_id= message.chat_id,message_id=message.message_id)
-                await update.message.reply_text(f"Başarılı. Artık sinyaller sana yönlendirilecek.")
+                await update.message.reply_text(f"Başarılı. Artık sinyaller sana yönlendirilecek. Eğer Hisse sormak istiyorsan /sor ile sorabilirsin.")
                 satinalanlartext = open("musteriler.txt","a")
                 satinalanlartext2 = open("musteriler2.txt","a")
                 current_datetime = datetime.now()
@@ -667,7 +667,7 @@ app = ApplicationBuilder().token("7334498197:AAFpv5W6XC6R44Dw_1a0sxThCux-Pt_AIw4
 # BIST hisse senedi listesi (örnek bir dosya)
 def load_bist_stocks():
     with open("bist_stocks.txt", "r",encoding="utf-8") as file:
-        stocks = file.read().splitlines()
+        stocks = file.read().splitlines()    
     return stocks
 
 def fetch_data(ticker, start, end):
@@ -684,8 +684,8 @@ def calculate_indicators(data):
     data = data.copy()
     
     # EMA hesapla
-    data['EMA_5'] = data['Close'].ewm(span=5, adjust=False).mean()
-    data['EMA_10'] = data['Close'].ewm(span=10, adjust=False).mean()
+    data['EMA_20'] = data['Close'].ewm(span=20, adjust=False).mean()
+    data['EMA_50'] = data['Close'].ewm(span=50, adjust=False).mean()
     
     # MACD ve Sinyal Çizgisi hesapla
     data['MACD'] = data['Close'].ewm(span=12, adjust=False).mean() - data['Close'].ewm(span=26, adjust=False).mean()
@@ -713,7 +713,7 @@ def check_signals(data):
     """
     results = []
     last_signal_time = None
-    min_signal_interval = timedelta(minutes=30)  # Minimum sinyal aralığı
+    min_signal_interval = timedelta(minutes=1)  # Minimum sinyal aralığı
 
     for i in range(1, len(data)):
         latest = data.iloc[i]
@@ -721,9 +721,9 @@ def check_signals(data):
 
         # EMA sinyali kontrolü
         ema_signal = None
-        if latest['EMA_5'] > latest['EMA_10'] and previous['EMA_5'] <= previous['EMA_10']:
+        if latest['EMA_20'] > latest['EMA_50'] and previous['EMA_20'] <= previous['EMA_50']:
             ema_signal = 'Buy'
-        elif latest['EMA_5'] < latest['EMA_10'] and previous['EMA_5'] >= previous['EMA_10']:
+        elif latest['EMA_20'] < latest['EMA_50'] and previous['EMA_20'] >= previous['EMA_50']:
             ema_signal = 'Sell'
 
         # MACD sinyali kontrolü
@@ -753,11 +753,11 @@ def check_signals(data):
         # RSI sinyali ile birlikte EMA ve MACD sinyalleri
         if rsi_signal == 'Oversold' and ema_signal == 'Buy' and macd_signal == 'Buy':
             if last_signal_time is None or (latest.name - last_signal_time) > min_signal_interval:  # En az 30 dakika aralık
-                results.append(f'Al Sinyali(RSI aşırı satım)\nTarih: {latest.name.strftime("%Y-%m-%d %H:%M")}\nHisse Fiyatı: {round(latest["Close"], 2)}')
+                results.append(f'Süper Al Sinyali(RSI aşırı satım)\nTarih: {latest.name.strftime("%Y-%m-%d %H:%M")}\nHisse Fiyatı: {round(latest["Close"], 2)}')
                 last_signal_time = latest.name
         elif rsi_signal == 'Overbought' and ema_signal == 'Sell' and macd_signal == 'Sell':
             if last_signal_time is None or (latest.name - last_signal_time) > min_signal_interval:  # En az 30 dakika aralık
-                results.append(f'Sat Sinyali(RSI aşırı alım)\nTarih: {latest.name.strftime("%Y-%m-%d %H:%M")}\nHisse Fiyatı: {round(latest["Close"], 2)}')
+                results.append(f'Süper Sat Sinyali(RSI aşırı alım)\nTarih: {latest.name.strftime("%Y-%m-%d %H:%M")}\nHisse Fiyatı: {round(latest["Close"], 2)}')
                 last_signal_time = latest.name
 
     return results
@@ -767,15 +767,15 @@ last_signal_times = {}
 async def check_all_stocks(context: CallbackContext):
     stocks = load_bist_stocks()
     today = datetime.now()
-    start = today.strftime('%Y-%m-%d')
+    start =  (today - timedelta(days=7)).strftime('%Y-%m-%d')
     end = (today + timedelta(days=365)).strftime('%Y-%m-%d')
-    
+    #today.strftime('%Y-%m-%d')
     for ticker in stocks:
         try:
             data = fetch_data(ticker, start, end)
             data = calculate_indicators(data)
             signals = check_signals(data)
-            
+            print(signals)            
             # Get the last signal time for this stock
             last_signal_time = last_signal_times.get(ticker, None)
             
@@ -786,18 +786,19 @@ async def check_all_stocks(context: CallbackContext):
                 
                 if last_signal_time is None or signal_time > last_signal_time:
                     # Send message to users
-                    with open("musteriler.txt", "r",encoding="utf-8") as filee:
-                        users = filee.read().splitlines()
-                    
-                    for user_id in users:
-                        try:
-                            await context.bot.send_message(chat_id=user_id, text=f"{ticker}: {signal}")
-                        except Exception as e:
-                            await context.bot.send_message(chat_id=gurupchatid, text=f"Mesaj gönderme hatası ({user_id}): {e}")
-                    
-                    # Update last signal time
-                    last_signal_times[ticker] = signal_time
-        
+                    if signal[0:1] == "A":
+                        with open("musteriler.txt", "r",encoding="utf-8") as filee:
+                            users = filee.read().splitlines()
+                        
+                        for user_id in users:
+                            try:
+                                await context.bot.send_message(chat_id=user_id, text=f"{ticker}: {signal}")
+                            except Exception as e:
+                                await context.bot.send_message(chat_id=gurupchatid, text=f"Mesaj gönderme hatası ({user_id}): {e}")
+                        
+                        # Update last signal time
+                        last_signal_times[ticker] = signal_time
+            
         except Exception as e:
             await context.bot.send_message(chat_id=gurupchatid, text=f"{ticker} için veri alınırken hata oluştu: {e}")
 async def sor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
